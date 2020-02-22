@@ -1,6 +1,7 @@
 package pdf.html.xml.git;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -20,17 +21,50 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.itextpdf.forms.PdfPageFormCopier;
+import com.itextpdf.html2pdf.ConverterProperties;
 import com.itextpdf.html2pdf.HtmlConverter;
+import com.itextpdf.kernel.events.Event;
+import com.itextpdf.kernel.events.IEventHandler;
+import com.itextpdf.kernel.events.PdfDocumentEvent;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
+import com.itextpdf.kernel.pdf.xobject.PdfFormXObject;
+import com.itextpdf.layout.Canvas;
+import com.itextpdf.layout.element.IBlockElement;
+import com.itextpdf.layout.element.IElement;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.property.TextAlignment;
 
 //import pdf.html.Documenter;
 
 public class MainClass {
+	
+	static String SRC = "C:\\Ramkrishna\\projects\\xml-html-parser-poc\\";
+	static String DEST = SRC + "merge.pdf";
 
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
+		
+		File file = new File(DEST);
+        file.getParentFile().mkdirs();
+        String htmlSource = SRC + "Sample.html";
+ 
+        try {
+			manipulatePdf(htmlSource, DEST);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+        if(true) {
+        	
+        	return;
+        }
 		
 		String fileName, subject = "", bulletin = "", issueDate = "", footer = "";
 		List<String> bodyList = new ArrayList<String>();
@@ -201,7 +235,7 @@ public class MainClass {
 		
 		
 		
-
+	
 	}
 	
 	public static void mergeForms(String dest, PdfReader[] readers) throws FileNotFoundException {
@@ -223,5 +257,149 @@ public class MainClass {
 		pdfDoc.close();
 		
 	}
+	
+	 public static void manipulatePdf(String htmlSource, String pdfDest) throws IOException {
+	        PdfWriter writer = new PdfWriter(pdfDest);
+	        PdfDocument pdfDocument = new PdfDocument(writer);
+	        
+	        String fileName = "C:\\Ramkrishna\\projects\\xml-html-parser-poc\\iText_Sample_Template\\SI_template_fr_CA_Header.html";
+	        String header = "pdfHtml Header and footer example using page-events";
+	        
+	        org.jsoup.nodes.Document doc = Jsoup.parse(new File(fileName), "UTF-8");
+	        header = doc.outerHtml();
+	        
+	        
+	        Header headerHandler = new Header(header);
+	        Footer footerHandler = new Footer();
+	 
+	        pdfDocument.addEventHandler(PdfDocumentEvent.START_PAGE, headerHandler);
+	        pdfDocument.addEventHandler(PdfDocumentEvent.END_PAGE, footerHandler);
+	 
+	        // Base URI is required to resolve the path to source files
+	        ConverterProperties converterProperties = new ConverterProperties().setBaseUri(SRC);
+	        HtmlConverter.convertToDocument(new FileInputStream(htmlSource), pdfDocument, converterProperties);
+	        
+	        
+	 
+	        // Write the total number of pages to the placeholder
+	        footerHandler.writeTotal(pdfDocument);
+	        pdfDocument.close();
+	    }
 
 }
+
+// Header event handler
+class Header implements IEventHandler {
+    private String header;
+
+    public Header(String header) {
+        this.header = header;
+    }
+
+    @Override
+    public void handleEvent(Event event) {
+        PdfDocumentEvent docEvent = (PdfDocumentEvent) event;
+        PdfDocument pdf = docEvent.getDocument();
+        
+        
+
+        PdfPage page = docEvent.getPage();
+        Rectangle pageSize = page.getPageSize();
+        
+        
+        try {
+			List<IElement> headerElements = HtmlConverter.convertToElements(header);
+			
+			Canvas canvas = new Canvas(new PdfCanvas(page), pdf, pageSize);
+			//Canvas canvas = new Canvas(canvas, pdfDoc, new Rectangle(36, 20, page.getPageSize().getWidth() - 72, 50));
+	        canvas.setFontSize(10);
+	        
+	
+			
+			for(IElement headerElement: headerElements) {
+				
+				if(headerElement instanceof IBlockElement) {
+					
+					canvas.add((IBlockElement)headerElement);
+				}
+			}
+	
+
+//	        
+//	        // Write text at position
+//	        canvas.showTextAligned(header,
+//	                pageSize.getWidth() / 2,
+//	                pageSize.getTop() - 30, TextAlignment.CENTER);
+	        canvas.close();
+	        
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    }
+}
+
+// Footer event handler
+class Footer implements IEventHandler {
+    protected PdfFormXObject placeholder;
+    protected float side = 20;
+    protected float x = 300;
+    protected float y = 25;
+    protected float space = 4.5f;
+    protected float descent = 3;
+
+    public Footer() {
+        placeholder = new PdfFormXObject(new Rectangle(0, 0, side, side));
+    }
+
+    @Override
+    public void handleEvent(Event event) {
+        PdfDocumentEvent docEvent = (PdfDocumentEvent) event;
+        PdfDocument pdf = docEvent.getDocument();
+        PdfPage page = docEvent.getPage();
+        int pageNumber = pdf.getPageNumber(page);
+        Rectangle pageSize = page.getPageSize();
+        
+        String html = "C:\\Ramkrishna\\projects\\xml-html-parser-poc\\iText_Sample_Template\\SI_template_fr_CA_Footer.html";
+        
+        List<IElement> footerElements = null;
+        
+        try {
+			footerElements = HtmlConverter.convertToElements(html);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        
+        // Creates drawing canvas
+        PdfCanvas pdfCanvas = new PdfCanvas(page);
+        Canvas canvas = new Canvas(pdfCanvas, pdf, pageSize);
+        
+        for (IElement footerElement : footerElements) {
+            // Making sure we are adding blocks to canvas
+            if (footerElement instanceof IBlockElement) {
+                canvas.add((IBlockElement)footerElement);
+            }
+        }
+
+//        Paragraph p = new Paragraph()
+//                .add("Page ")
+//                .add(String.valueOf(pageNumber))
+//                .add(" of");
+//
+//        canvas.showTextAligned(p, x, y, TextAlignment.RIGHT);
+        canvas.close();
+
+        // Create placeholder object to write number of pages
+//        pdfCanvas.addXObject(placeholder, x + space, y - descent);
+//        pdfCanvas.release();
+    }
+
+    public void writeTotal(PdfDocument pdf) {
+        Canvas canvas = new Canvas(placeholder, pdf);
+        canvas.showTextAligned(String.valueOf(pdf.getNumberOfPages()),
+                0, descent, TextAlignment.LEFT);
+        canvas.close();
+    }
+}
+
